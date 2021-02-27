@@ -54,7 +54,7 @@ func (f *StackFollower) Receiver() {
 		toBeFollowed := <-f.SubmissionChannel
 		f.Log.Info("Received follow request", "UID", toBeFollowed.UID, "Stack ID", toBeFollowed.Status.StackID)
 		if !f.BeingFollowed(toBeFollowed.Status.StackID) {
-			f.StartFollowing(toBeFollowed)
+			f.startFollowing(toBeFollowed)
 		}
 		_ = f.UpdateStackStatus(context.TODO(), toBeFollowed)
 	}
@@ -68,7 +68,7 @@ func (f *StackFollower) BeingFollowed(stackId string) bool {
 }
 
 // Identify if the follower is actively working this one.
-func (f *StackFollower) StartFollowing(stack *cloudformationv1alpha1.Stack) {
+func (f *StackFollower) startFollowing(stack *cloudformationv1alpha1.Stack) {
 	f.mapPollingList.Store(stack.Status.StackID, stack)
 	f.Log.Info("Now following Stack", "StackID", stack.Status.StackID)
 }
@@ -176,7 +176,7 @@ func (f *StackFollower) processStack(key interface{}, value interface{}) bool {
 		if err != nil {
 			f.Log.Error(err, "Failed to update stack status", "UID", stack.UID, "Stack ID", stackId)
 			// On error put it back to make sure we save it next time.
-			f.StartFollowing(stack)
+			f.startFollowing(stack)
 		}
 	}
 

@@ -100,15 +100,6 @@ func (r *StackReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 		return ctrl.Result{}, err
 	}
 
-	// Cannot CREATE/UPDATE/DELETE if we're actively polling it for some other change.
-	if r.StackFollower.BeingFollowed(loop.instance.Status.StackID) {
-		// TODO: Should whatever this reconciliation was be retried by sending an error back?
-		return ctrl.Result{}, nil
-	}
-
-	// TODO: Need to see if the stack is actually in progress but not being followed...
-	// Would we want to just send it straight to the follower in this case?
-
 	// Check if the Stack instance is marked to be deleted, which is
 	// indicated by the deletion timestamp being set.
 	isStackMarkedToBeDeleted := loop.instance.GetDeletionTimestamp() != nil
@@ -151,6 +142,14 @@ func (r *StackReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 	}
 
 	if exists {
+		// If the stack is in progress but not being followed, follow it to catch updates
+		// If it is being followed, we want the same thing, just send it over to the other thread to check it in all
+		// IN_PROGRESS cases.
+		if !r.CloudFormationHelper.StackInTerminalState(loop.stack.StackStatus) {
+			r.StackFollower.SubmissionChannel <- loop.instance
+			return ctrl.Result{}, nil
+		}
+
 		return reconcile.Result{}, r.updateStack(loop)
 	}
 

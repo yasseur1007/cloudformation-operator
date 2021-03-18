@@ -110,6 +110,14 @@ func (r *StackReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 			// Remove stacksFinalizer. Once all finalizers have been
 			// removed, the object will be deleted.
 			if loop.instance.Status.StackStatus == "DELETE_COMPLETE" {
+				_, stillInStackFollower := r.StackFollower.mapPollingList.Load(loop.instance.Status.StackID)
+				if stillInStackFollower {
+					r.Log.Info("Keep the Finalizers in place - REQUEUE due to Stackfollower still listening for status update:")
+					return ctrl.Result{Requeue: true}, nil
+				}
+				// else we can let k8s proceed with the deletion because we don't have anymore
+				// the risk of updating (via statusFollower) a deleted k8s resource.
+
 				controllerutil.RemoveFinalizer(loop.instance, stacksFinalizer)
 				controllerutil.RemoveFinalizer(loop.instance, legacyFinalizer)
 				err := r.Update(loop.ctx, loop.instance)
@@ -238,6 +246,12 @@ func (r *StackReconciler) updateStack(loop *StackLoop) error {
 			r.Log.WithValues("stack", loop.instance.Name).Info("stack already updated")
 			return nil
 		}
+
+		if strings.Contains(err.Error(), "does not exist") {
+			r.Log.WithValues("stack", loop.instance.Name).Info("Stack does not exist in AWS. Re-creating it.")
+			return r.createStack(loop)
+		}
+
 		return err
 	}
 

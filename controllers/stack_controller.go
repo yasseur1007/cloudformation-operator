@@ -110,9 +110,9 @@ func (r *StackReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl
 			// Remove stacksFinalizer. Once all finalizers have been
 			// removed, the object will be deleted.
 			if loop.instance.Status.StackStatus == "DELETE_COMPLETE" {
-				_, stillInStackFollower := r.StackFollower.mapPollingList.Load(loop.instance.Status.StackID)
-				if stillInStackFollower {
-					r.Log.Info("Keep the Finalizers in place - REQUEUE due to Stackfollower still listening for status update:")
+				isBeingFollowed := r.StackFollower.BeingFollowed(loop.instance.Status.StackID)
+				if isBeingFollowed {
+					r.Log.Info("Keep the finalizers in place to prevent k8s resource to be removed while Stackfollower still synchronizing the remote CF status")
 					return ctrl.Result{Requeue: true}, nil
 				}
 				// else we can let k8s proceed with the deletion because we don't have anymore
